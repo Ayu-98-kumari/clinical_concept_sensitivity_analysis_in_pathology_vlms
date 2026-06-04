@@ -342,13 +342,7 @@ Full per-prompt breakdowns: [`results/zero_shot/*_summary.txt`](./results/zero_s
 If you build on this work, please cite:
 
 ```bibtex
-@misc{clinical_concept_sensitivity_pathology_vlms_2025,
-  title  = {Clinical Concept Sensitivity Analysis in Pathology Vision-Language Models},
-  author = {Your Name and Co-authors},
-  year   = {2025},
-  howpublished = {\url{https://github.com/Ayu-98-kumari/clinical_concept_sensitivity_analysis_in_pathology_vlms}},
-  note   = {Zero-shot benchmark of CONCH, PathGen-CLIP, KEEP, QuiltNet, and PLIP on PatchCamelyon}
-}
+Comming Soon
 ```
 
 Please also cite the original model and dataset papers:
