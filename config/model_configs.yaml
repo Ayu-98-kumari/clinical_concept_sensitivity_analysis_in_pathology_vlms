@@ -1,0 +1,88 @@
+# Model configurations for all supported VLMs
+
+models:
+  conch:
+    name: "CONCH"
+    type: "timm"
+    model_id: "hf_hub:MahmoodLab/CONCH"
+    embedding_dim: 512
+    requires_hf_auth: true
+    device: "cuda"
+
+  pathgen_clip:
+    name: "PathGen-CLIP"
+    type: "open_clip"
+    model_id: "ViT-B-16"
+    # Download the PathGen-CLIP checkpoint from
+    # https://huggingface.co/jamessyx/PathGen-CLIP and place it here.
+    checkpoint_path: "downloaded_models/pathgenclip.pt"
+    embedding_dim: 512
+    device: "cuda"
+
+  keep:
+    name: "KEEP"
+    type: "transformers"
+    model_id: "Astaxanthin/KEEP"
+    trust_remote_code: true
+    embedding_dim: 768
+    device: "cuda"
+
+  quiltnet:
+    name: "QuiltNet-B-32"
+    type: "open_clip"
+    model_id: "hf-hub:wisdomik/QuiltNet-B-32"
+    embedding_dim: 512
+    device: "cuda"
+
+  plip:
+    name: "PLIP"
+    type: "transformers"
+    model_id: "vinid/plip"
+    embedding_dim: 512
+    device: "cuda"
+
+  llava_med:
+    name: "LLaVA-Med"
+    type: "transformers"
+    model_id: "microsoft/llava-med-v1.5-mistral-7b"
+    embedding_dim: 4096
+    device: "cuda"
+    special_handling: true  # Conversational VLM
+
+# Training configurations
+training:
+  linear_probe:
+    learning_rates: [1e-4, 1e-3, 1e-2]  # Grid search
+    batch_size: 256
+    epochs: 50
+    optimizer: "Adam"
+    weight_decay: 1e-4
+    early_stopping_patience: 10
+    data_fractions: [0.01, 0.05, 0.1, 0.25, 0.5, 0.75, 1.0]
+    num_runs: 5  # For statistical significance
+
+  lora:
+    learning_rates: [1e-5, 5e-5, 1e-4]
+    batch_size: 64
+    epochs: 30
+    warmup_steps: 500
+    optimizer: "AdamW"
+    weight_decay: 0.01
+    lora_ranks: [8, 16, 32]
+    lora_alphas: [16, 32]
+    lora_dropout: 0.1
+    target_modules: ['q_proj', 'v_proj', 'k_proj', 'o_proj']
+    num_runs: 5
+
+# Zero-shot evaluation settings
+zero_shot:
+  batch_size: 128
+  temperature: 1.0
+  use_all_prompts: true
+
+# General settings
+general:
+  seed: 42
+  num_workers: 4
+  pin_memory: true
+  mixed_precision: true

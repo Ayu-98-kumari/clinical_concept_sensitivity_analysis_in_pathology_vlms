@@ -1,0 +1,35 @@
+# Prompt configurations for zero-shot evaluation
+# 4 categories × 5 variations = 20 prompt pairs
+#
+# IMPORTANT: Order must match dataset labels!
+# For PCam: Label 0 = normal, Label 1 = tumor
+# Therefore prompts are: [normal_prompt, tumor_prompt]
+
+prompt_categories:
+  minimal:  # Simple single words
+    - ["normal", "cancer"]
+    - ["healthy", "tumor"]
+    - ["benign", "malignant"]
+    - ["no metastasis", "metastasis"]
+    - ["normal tissue", "cancerous tissue"]
+
+  anatomical:  # Anatomical context
+    - ["normal lymph node", "lymph node with cancer"]
+    - ["lymph node without metastasis", "lymph node metastasis"]
+    - ["healthy lymph node", "metastatic lymph node"]
+    - ["lymph node normal tissue", "tumor in lymph node"]
+    - ["benign lymph node tissue", "cancerous lymph node tissue"]
+
+  descriptive:  # With imaging modality
+    - ["histopathology image of normal tissue", "histopathology image showing metastatic cancer"]
+    - ["normal lymph node architecture", "lymph node with metastatic breast cancer"]
+    - ["H&E stained normal lymph node", "H&E stained lymph node with tumor"]
+    - ["microscopy image of healthy lymph node", "microscopy image of cancer metastasis"]
+    - ["pathology slide with normal cells", "pathology slide showing malignant cells"]
+
+  clinical:  # Clinical terminology
+    - ["sentinel lymph node without tumor involvement", "sentinel lymph node with metastatic breast carcinoma"]
+    - ["lymph node section with preserved architecture", "lymph node section showing infiltrating carcinoma"]
+    - ["lymph node with normal histology", "metastatic adenocarcinoma in lymph node"]
+    - ["lymph node free of metastatic disease", "breast cancer metastasis to regional lymph node"]
+    - ["histologically normal lymphoid tissue", "histological evidence of tumor metastasis"]

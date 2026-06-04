@@ -1,0 +1,72 @@
+# Dataset configurations
+
+datasets:
+  pcam:
+    name: "PatchCamelyon (PCam)"
+    # Update this path to where you have downloaded the PCam HDF5 files.
+    data_dir: "data/PCam"
+    type: "hdf5"
+    num_classes: 2
+    class_names: ["normal", "tumor"]
+    image_size: [96, 96]
+    splits:
+      train: "camelyonpatch_level_2_split_train_x.h5"
+      train_labels: "camelyonpatch_level_2_split_train_y.h5"
+      valid: "camelyonpatch_level_2_split_valid_x.h5"
+      valid_labels: "camelyonpatch_level_2_split_valid_y.h5"
+      test: "camelyonpatch_level_2_split_test_x.h5"
+      test_labels: "camelyonpatch_level_2_split_test_y.h5"
+
+  breakhis:
+    name: "BreakHis"
+    data_dir: "path/to/breakhis"  # Update this path
+    type: "image_folder"
+    num_classes: 2
+    class_names: ["benign", "malignant"]
+    magnifications: [40, 100, 200, 400]
+    default_magnification: 400
+    image_size: [224, 224]
+
+  bach:
+    name: "BACH"
+    data_dir: "path/to/bach"  # Update this path
+    type: "image_folder"
+    num_classes: 4
+    class_names: ["Normal", "Benign", "InSitu", "Invasive"]
+    image_size: [224, 224]
+
+  idc:
+    name: "IDC (Invasive Ductal Carcinoma)"
+    data_dir: "path/to/idc"  # Update this path
+    type: "image_folder"
+    num_classes: 2
+    class_names: ["no_idc", "idc"]
+    image_size: [50, 50]
+
+# Preprocessing settings
+preprocessing:
+  normalize:
+    mean: [0.485, 0.456, 0.406]  # ImageNet stats
+    std: [0.229, 0.224, 0.225]
+
+  augmentation:
+    train:
+      random_horizontal_flip: true
+      random_vertical_flip: true
+      random_rotation: 15
+      color_jitter:
+        brightness: 0.2
+        contrast: 0.2
+        saturation: 0.2
+        hue: 0.1
+
+    test:
+      # No augmentation for test/validation
+
+# Data loading settings
+dataloader:
+  batch_size: 64
+  num_workers: 4
+  pin_memory: true
+  shuffle_train: true
+  shuffle_test: false
