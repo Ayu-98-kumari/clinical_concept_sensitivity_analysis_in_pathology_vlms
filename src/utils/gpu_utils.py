@@ -172,7 +172,12 @@ def get_device(device: Optional[str] = None) -> torch.device:
         cuda:0  # If GPU available
     """
     if device is None:
-        device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        if torch.cuda.is_available():
+            device = 'cuda'
+        elif torch.backends.mps.is_available():
+            device = 'mps'
+        else:
+            device = 'cpu'
 
     return torch.device(device)
 

@@ -30,9 +30,27 @@ class BaseVLModel(ABC, nn.Module):
 
     def __init__(self, device: str = "cuda"):
         super().__init__()
-        self.device = device if torch.cuda.is_available() else "cpu"
+        self.device = self._resolve_device(device)
         self.model = None
         self.temperature = 1.0
+
+    @staticmethod
+    def _resolve_device(device: str) -> str:
+        """Honour the requested device when available; otherwise fall back
+        in the order cuda → mps → cpu. An explicit "cpu" is always honoured."""
+        if device == "cpu":
+            return "cpu"
+        if device.startswith("cuda"):
+            if torch.cuda.is_available():
+                return device
+        elif device == "mps":
+            if torch.backends.mps.is_available():
+                return "mps"
+        if torch.cuda.is_available():
+            return "cuda"
+        if torch.backends.mps.is_available():
+            return "mps"
+        return "cpu"
 
     @abstractmethod
     def encode_image(self, images: torch.Tensor) -> torch.Tensor:
