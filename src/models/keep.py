@@ -110,7 +110,9 @@ class KEEPModel(BaseVLModel):
                 "Please install: pip install transformers torchvision pillow"
             )
         except Exception as e:
-            raise RuntimeError(f"Failed to load KEEP model: {e}")
+            import traceback
+            traceback.print_exc()
+            raise RuntimeError(f"Failed to load KEEP model: {e}") from e
 
     def encode_image(self, images: torch.Tensor) -> torch.Tensor:
         """

@@ -15,7 +15,7 @@ models:
     model_id: "ViT-B-16"
     # Download the PathGen-CLIP checkpoint from
     # https://huggingface.co/jamessyx/PathGen-CLIP and place it here.
-    checkpoint_path: "downloaded_models/pathgenclip.pt"
+    checkpoint_path: null  # set to path of downloaded checkpoint to use PathGen-CLIP weights
     embedding_dim: 512
     device: "cuda"
 

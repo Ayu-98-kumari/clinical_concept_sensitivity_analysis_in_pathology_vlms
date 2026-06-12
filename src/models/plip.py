@@ -95,6 +95,8 @@ class PLIPModel(BaseVLModel):
                     with torch.no_grad():
                         dummy_img = torch.randn(1, 3, 224, 224).to(self.device)
                         dummy_features = self.model.get_image_features(pixel_values=dummy_img)
+                        if not isinstance(dummy_features, torch.Tensor):
+                            dummy_features = dummy_features.pooler_output if hasattr(dummy_features, 'pooler_output') and dummy_features.pooler_output is not None else dummy_features.last_hidden_state[:, 0, :]
                         self.embedding_dim = dummy_features.shape[-1]
 
             print(f"PLIP model loaded successfully on {self.device}")
@@ -125,6 +127,13 @@ class PLIPModel(BaseVLModel):
             # Use PLIP's get_image_features method
             image_features = self.model.get_image_features(pixel_values=images)
 
+            # Newer transformers versions may return a dataclass instead of a tensor
+            if not isinstance(image_features, torch.Tensor):
+                if hasattr(image_features, 'pooler_output') and image_features.pooler_output is not None:
+                    image_features = image_features.pooler_output
+                else:
+                    image_features = image_features.last_hidden_state[:, 0, :]
+
             # Normalize features for zero-shot classification
             image_features = torch.nn.functional.normalize(image_features, dim=-1)
 
@@ -154,6 +163,13 @@ class PLIPModel(BaseVLModel):
 
             # Encode text using PLIP's get_text_features method
             text_features = self.model.get_text_features(**text_inputs)
+
+            # Newer transformers versions may return a dataclass instead of a tensor
+            if not isinstance(text_features, torch.Tensor):
+                if hasattr(text_features, 'pooler_output') and text_features.pooler_output is not None:
+                    text_features = text_features.pooler_output
+                else:
+                    text_features = text_features.last_hidden_state[:, 0, :]
 
             # Normalize features for zero-shot classification
             text_features = torch.nn.functional.normalize(text_features, dim=-1)
