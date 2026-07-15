@@ -1,0 +1,1146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Clinical Concept Sensitivity · Pathology VLMs</title>
+  <meta name="description" content="A study of how prompt wording affects zero-shot performance in five pathology VLMs on PatchCamelyon, with GradCAM attention analysis.">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    /* ── TOKENS (light) ───────────────────────────────────────── */
+    :root {
+      --primary:       #1a5276;
+      --primary-lite:  #2e86c1;
+      --accent:        #0e7c6e;
+      --bg:            #ffffff;
+      --bg-alt:        #f5f8fa;
+      --bg-card:       #ffffff;
+      --text:          #1a1a2e;
+      --text-muted:    #5d6778;
+      --border:        #d8e3ec;
+      --th:            #eaf4fb;
+      --best-bg:       #e8f8f5;
+      --best-text:     #0b6b5a;
+      --shadow:        rgba(0,0,0,.08);
+      --code-bg:       #f1f3f5;
+    }
+
+    /* ── TOKENS (dark via system preference) ─────────────────── */
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --primary:      #74b9e7;
+        --primary-lite: #90caf9;
+        --accent:       #4db6ac;
+        --bg:           #0d1117;
+        --bg-alt:       #161b22;
+        --bg-card:      #1c2128;
+        --text:         #e6edf3;
+        --text-muted:   #8b949e;
+        --border:       #30363d;
+        --th:           #1c2128;
+        --best-bg:      #0d2c24;
+        --best-text:    #56d364;
+        --shadow:       rgba(0,0,0,.4);
+        --code-bg:      #161b22;
+      }
+    }
+
+    /* ── TOKENS (dark via toggle) ─────────────────────────────── */
+    :root[data-theme="dark"] {
+      --primary:      #74b9e7;
+      --primary-lite: #90caf9;
+      --accent:       #4db6ac;
+      --bg:           #0d1117;
+      --bg-alt:       #161b22;
+      --bg-card:      #1c2128;
+      --text:         #e6edf3;
+      --text-muted:   #8b949e;
+      --border:       #30363d;
+      --th:           #1c2128;
+      --best-bg:      #0d2c24;
+      --best-text:    #56d364;
+      --shadow:       rgba(0,0,0,.4);
+      --code-bg:      #161b22;
+    }
+
+    /* ── BASE ─────────────────────────────────────────────────── */
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.7;
+      font-size: 16px;
+    }
+
+    .container      { max-width: 960px;  margin: 0 auto; padding: 0 24px; }
+    .wide-container { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+
+    section { padding: 64px 0; border-bottom: 1px solid var(--border); }
+    section:last-child { border-bottom: none; }
+    section.alt { background: var(--bg-alt); }
+
+    h2 {
+      font-size: 1.55rem;
+      font-weight: 700;
+      margin-bottom: 24px;
+      color: var(--primary);
+    }
+    h3 {
+      font-size: 1.05rem;
+      font-weight: 600;
+      margin-bottom: 12px;
+      margin-top: 32px;
+      color: var(--text);
+    }
+    h3:first-of-type { margin-top: 0; }
+    p { margin-bottom: 16px; }
+    p:last-child { margin-bottom: 0; }
+    a { color: var(--primary-lite); }
+
+    /* ── NAV ──────────────────────────────────────────────────── */
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+    }
+    .nav-inner {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 52px;
+      gap: 12px;
+    }
+    .nav-logo {
+      font-weight: 700;
+      font-size: 0.88rem;
+      color: var(--primary);
+      text-decoration: none;
+      white-space: nowrap;
+      flex-shrink: 0;
+    }
+    .nav-links {
+      display: flex;
+      gap: 2px;
+      flex-wrap: wrap;
+      overflow: hidden;
+    }
+    .nav-links a {
+      font-size: 0.8rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      text-decoration: none;
+      padding: 5px 10px;
+      border-radius: 5px;
+      transition: background .15s, color .15s;
+      white-space: nowrap;
+    }
+    .nav-links a:hover { color: var(--primary); background: var(--bg-alt); }
+    .theme-btn {
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 5px 10px;
+      cursor: pointer;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      flex-shrink: 0;
+      transition: border-color .15s, color .15s;
+    }
+    .theme-btn:hover { border-color: var(--primary); color: var(--primary); }
+
+    /* ── HERO ─────────────────────────────────────────────────── */
+    #hero {
+      padding: 72px 0 60px;
+      text-align: center;
+      background: linear-gradient(180deg, var(--bg-alt) 0%, var(--bg) 100%);
+      border-bottom: 1px solid var(--border);
+    }
+    .conf-badge {
+      display: inline-block;
+      background: var(--primary);
+      color: #fff;
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: .04em;
+      padding: 4px 14px;
+      border-radius: 20px;
+      margin-bottom: 22px;
+      text-transform: uppercase;
+    }
+    .hero-title {
+      font-size: 2rem;
+      font-weight: 800;
+      line-height: 1.25;
+      max-width: 800px;
+      margin: 0 auto 32px;
+    }
+    .authors {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 36px;
+      margin-bottom: 36px;
+    }
+    .author-name  { font-weight: 600; font-size: 1rem; }
+    .author-affil { font-size: 0.82rem; color: var(--text-muted); margin-top: 3px; line-height: 1.4; }
+    .author-orcid { margin-top: 4px; font-size: 0.75rem; }
+    .author-orcid a { color: var(--primary-lite); text-decoration: none; }
+    .author-orcid a:hover { text-decoration: underline; }
+
+    .action-links {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 10px 22px;
+      border-radius: 8px;
+      font-weight: 600;
+      font-size: 0.88rem;
+      text-decoration: none;
+      transition: opacity .15s, background .15s;
+      cursor: pointer;
+      border: none;
+    }
+    .btn-primary { background: var(--primary); color: #fff; }
+    .btn-primary:hover { opacity: .85; }
+    .btn-outline { border: 1.5px solid var(--border); color: var(--text-muted); background: var(--bg-card); }
+    .btn-outline:hover { border-color: var(--primary); color: var(--primary); }
+    .btn-ghost  { border: 1.5px solid var(--border); color: var(--text-muted); background: var(--bg-alt); opacity: .7; cursor: default; }
+
+    /* ── STAT STRIP ───────────────────────────────────────────── */
+    .stat-strip { background: var(--bg-alt); border-bottom: 1px solid var(--border); }
+    .stat-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      padding: 36px 0;
+    }
+    .stat-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px 16px;
+      text-align: center;
+      box-shadow: 0 2px 8px var(--shadow);
+    }
+    .stat-num   { font-size: 1.9rem; font-weight: 800; color: var(--primary); line-height: 1; }
+    .stat-label { font-size: 0.78rem; color: var(--text-muted); margin-top: 7px; }
+
+    /* ── FIGURES ──────────────────────────────────────────────── */
+    .figure-block { margin: 32px 0; text-align: center; }
+    .figure-block img {
+      max-width: 100%;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      display: block;
+      margin: 0 auto;
+    }
+    .figure-caption {
+      font-size: 0.845rem;
+      color: var(--text-muted);
+      margin-top: 12px;
+      max-width: 740px;
+      margin-left: auto;
+      margin-right: auto;
+      line-height: 1.55;
+    }
+
+    /* ── TABLES ───────────────────────────────────────────────── */
+    .table-wrap {
+      overflow-x: auto;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      margin: 20px 0;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+    th {
+      background: var(--th);
+      font-weight: 600;
+      text-align: left;
+      padding: 10px 14px;
+      border-bottom: 2px solid var(--border);
+      white-space: nowrap;
+    }
+    td { padding: 9px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    tr:last-child td  { border-bottom: none; }
+    tbody tr:hover td { background: var(--bg-alt); }
+
+    .best-row td  { background: var(--best-bg); }
+    .best-val     { font-weight: 700; color: var(--best-text); }
+    .cat-hdr td   {
+      background: var(--bg-alt);
+      font-weight: 700;
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: var(--text-muted);
+      padding: 6px 14px;
+    }
+    .mono { font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; font-size: 0.82rem; }
+    td.num { text-align: right; }
+
+    /* ── CONTRIBUTION CARDS ───────────────────────────────────── */
+    .contrib-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 18px;
+    }
+    .contrib-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 22px;
+      box-shadow: 0 2px 8px var(--shadow);
+    }
+    .contrib-num   { font-size: 2.2rem; font-weight: 900; color: var(--border); line-height: 1; margin-bottom: 10px; }
+    .contrib-title { font-weight: 700; font-size: 0.92rem; color: var(--primary); margin-bottom: 8px; }
+    .contrib-desc  { font-size: 0.845rem; color: var(--text-muted); line-height: 1.6; }
+
+    /* ── FINDING CARDS ────────────────────────────────────────── */
+    .finding-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 14px;
+      margin-top: 28px;
+    }
+    .finding-card {
+      border-radius: 10px;
+      padding: 18px 20px;
+      border-left: 4px solid;
+    }
+    .finding-card h3 {
+      font-size: 0.82rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      margin-bottom: 8px;
+      margin-top: 0;
+    }
+    .finding-card p { font-size: 0.86rem; line-height: 1.6; margin: 0; }
+
+    .fc-tp { background: #e8f8f5; border-color: #1abc9c; }
+    .fc-tn { background: #eaf4fb; border-color: #2980b9; }
+    .fc-fp { background: #fef9e7; border-color: #f39c12; }
+    .fc-fn { background: #fdedec; border-color: #e74c3c; }
+
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) .fc-tp { background: #0b2e24; }
+      :root:not([data-theme="light"]) .fc-tn { background: #0d2137; }
+      :root:not([data-theme="light"]) .fc-fp { background: #2e2100; }
+      :root:not([data-theme="light"]) .fc-fn { background: #2e0d0b; }
+    }
+    :root[data-theme="dark"] .fc-tp { background: #0b2e24; }
+    :root[data-theme="dark"] .fc-tn { background: #0d2137; }
+    :root[data-theme="dark"] .fc-fp { background: #2e2100; }
+    :root[data-theme="dark"] .fc-fn { background: #2e0d0b; }
+
+    /* ── TAKEAWAY LIST ────────────────────────────────────────── */
+    .takeaway-list { list-style: none; display: flex; flex-direction: column; gap: 12px; }
+    .takeaway-item {
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+      background: var(--bg-alt);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 16px 18px;
+    }
+    .t-icon { font-size: 1.3rem; flex-shrink: 0; margin-top: 1px; }
+    .t-text { font-size: 0.88rem; line-height: 1.65; }
+    .t-text strong { color: var(--primary); }
+
+    /* ── CODE BLOCK ───────────────────────────────────────────── */
+    .code-block {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px 22px;
+      overflow-x: auto;
+      font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+      font-size: 0.8rem;
+      line-height: 1.65;
+      color: var(--text);
+      white-space: pre;
+      margin-top: 14px;
+    }
+
+    /* ── COLLAPSIBLE ──────────────────────────────────────────── */
+    .toggle-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      background: none;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px 16px;
+      cursor: pointer;
+      font-size: 0.845rem;
+      color: var(--text-muted);
+      margin: 8px 0 0;
+      transition: border-color .15s, color .15s;
+    }
+    .toggle-btn:hover { border-color: var(--primary); color: var(--primary); }
+    .collapsible { overflow: hidden; max-height: 0; transition: max-height .3s ease; }
+    .collapsible.open { max-height: 3000px; }
+
+    /* ── KEYWORD TAGS ─────────────────────────────────────────── */
+    .tags { display: flex; flex-wrap: wrap; gap: 7px; margin-top: 18px; }
+    .tag {
+      background: var(--bg-alt);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 3px 12px;
+      font-size: 0.78rem;
+      color: var(--text-muted);
+    }
+
+    /* ── FOOTER ───────────────────────────────────────────────── */
+    footer {
+      padding: 28px 0;
+      text-align: center;
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      border-top: 1px solid var(--border);
+    }
+    footer a { color: var(--primary); text-decoration: none; }
+    footer a:hover { text-decoration: underline; }
+
+    /* ── RESPONSIVE ───────────────────────────────────────────── */
+    @media (max-width: 720px) {
+      .hero-title   { font-size: 1.5rem; }
+      h2            { font-size: 1.3rem; }
+      .stat-row     { grid-template-columns: repeat(2,1fr); }
+      .contrib-grid { grid-template-columns: 1fr; }
+      .finding-grid { grid-template-columns: 1fr; }
+      .nav-links    { display: none; }
+      section       { padding: 48px 0; }
+    }
+    @media (max-width: 480px) {
+      .stat-row   { grid-template-columns: repeat(2,1fr); gap: 10px; }
+      .stat-num   { font-size: 1.5rem; }
+      .authors    { gap: 24px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════════ NAV -->
+<nav>
+  <div class="nav-inner">
+    <a class="nav-logo" href="#hero">Pathology VLMs</a>
+    <div class="nav-links">
+      <a href="#abstract">Abstract</a>
+      <a href="#method">Method</a>
+      <a href="#results">Results</a>
+      <a href="#gradcam">GradCAM</a>
+      <a href="#findings">Findings</a>
+      <a href="#citation">Citation</a>
+    </div>
+    <button class="theme-btn" onclick="toggleTheme()" title="Toggle dark/light mode">🌓</button>
+  </div>
+</nav>
+
+<!-- ═══════════════════════════════════════════════════════════ HERO -->
+<section id="hero">
+  <div class="container">
+    <div class="conf-badge">ICCISD 2026 · IEEE</div>
+
+    <h1 class="hero-title">
+      Clinical Concept Sensitivity and Visual Attention Analysis<br>
+      for Breast Cancer Detection
+    </h1>
+
+    <div class="authors">
+      <div>
+        <div class="author-name">Ayushi Kumari</div>
+        <div class="author-affil">Amity Institute of Information Technology<br>Amity University, Noida, India</div>
+        <div class="author-orcid"><a href="https://orcid.org/0009-0009-9298-5321" target="_blank">ORCID 0009-0009-9298-5321 ↗</a></div>
+      </div>
+      <div>
+        <div class="author-name">Seema Rani</div>
+        <div class="author-affil">Amity Institute of Information Technology<br>Amity University, Noida, India</div>
+        <div class="author-orcid"><a href="https://orcid.org/0009-0002-1994-6376" target="_blank">ORCID 0009-0002-1994-6376 ↗</a></div>
+      </div>
+    </div>
+
+    <div class="action-links">
+      <a class="btn btn-primary"
+         href="https://github.com/Ayu-98-kumari/clinical_concept_sensitivity_analysis_in_pathology_vlms"
+         target="_blank">
+        &#xe645; GitHub Code
+      </a>
+      <span class="btn btn-ghost">📄 Paper · Coming Soon</span>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════ STAT STRIP -->
+<div class="stat-strip">
+  <div class="container">
+    <div class="stat-row">
+      <div class="stat-card">
+        <div class="stat-num">5</div>
+        <div class="stat-label">Pathology VLMs benchmarked</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num">20</div>
+        <div class="stat-label">Prompt pairs across 4 categories</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num">83.3%</div>
+        <div class="stat-label">Highest zero-shot accuracy (KEEP)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num">34.9pp</div>
+        <div class="stat-label">Maximum prompt sensitivity swing</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ ABSTRACT -->
+<section id="abstract">
+  <div class="container">
+    <h2>Abstract</h2>
+    <p>
+      Vision-language models (VLMs) have emerged as powerful tools for computational pathology,
+      enabling zero-shot classification through natural language prompts. Nevertheless, the
+      implication of prompt design on model performance — especially the underlying attention
+      mechanisms — lacks clarity. In this paper, we present a comprehensive study evaluating
+      prompts in five state-of-the-art pathology VLMs:
+      <strong>CONCH</strong>, <strong>PathGen-CLIP</strong>, <strong>KEEP</strong>,
+      <strong>QuiltNet</strong>, and <strong>PLIP</strong>.
+    </p>
+    <p>
+      To systematically evaluate these models, we design <strong>20 prompts</strong> organized
+      into four categories — <em>minimal</em>, <em>anatomical</em>, <em>descriptive</em>, and
+      <em>clinical</em>. Our quantitative analysis on the PCam dataset reveals that clinical
+      prompts improve accuracy by up to <strong>30%</strong> compared to minimal prompts,
+      with KEEP achieving the highest performance of <strong>83.3%</strong>. Furthermore, we
+      uncover model-specific biases through GradCAM-based attention visualization across
+      confusion matrix categories: false positives arise from attention to dense cellular
+      regions, while false negatives result from focus on surrounding stroma rather than
+      tumor regions. Our findings provide practical guidelines for prompt selection in
+      clinical deployment and highlight the importance of attention analysis for model
+      interpretability.
+    </p>
+    <div class="tags">
+      <span class="tag">Vision-Language Models</span>
+      <span class="tag">Prompt Engineering</span>
+      <span class="tag">Computational Pathology</span>
+      <span class="tag">GradCAM</span>
+      <span class="tag">Interpretability</span>
+      <span class="tag">Zero-Shot Learning</span>
+      <span class="tag">Breast Cancer Detection</span>
+    </div>
+  </div>
+</section>
+
+<!-- ═════════════════════════════════════════════════ CONTRIBUTIONS -->
+<section id="contributions" class="alt">
+  <div class="container">
+    <h2>Contributions</h2>
+    <div class="contrib-grid">
+      <div class="contrib-card">
+        <div class="contrib-num">01</div>
+        <div class="contrib-title">Comprehensive Prompt Evaluation</div>
+        <p class="contrib-desc">
+          Controlled experiment with 20 prompts across 4 hierarchical categories on 5 SOTA
+          pathology VLMs, quantifying performance variability within and across prompt types
+          on the full PCam test split (32,768 images).
+        </p>
+      </div>
+      <div class="contrib-card">
+        <div class="contrib-num">02</div>
+        <div class="contrib-title">Confusion-Matrix Attention Analysis</div>
+        <p class="contrib-desc">
+          GradCAM visualization across all four confusion matrix categories (TP, TN, FP, FN),
+          identifying systematic attention patterns that explain model-specific failure modes
+          and their underlying causes.
+        </p>
+      </div>
+      <div class="contrib-card">
+        <div class="contrib-num">03</div>
+        <div class="contrib-title">Clinical Deployment Guidelines</div>
+        <p class="contrib-desc">
+          Empirical evidence that clinical terminology improves accuracy by up to 30%,
+          combined with failure-mode analysis that informs prompt selection and attention
+          monitoring strategies for clinical use.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════ METHOD -->
+<section id="method">
+  <div class="container">
+    <h2>Method</h2>
+
+    <h3>Zero-Shot Classification via CLIP</h3>
+    <p>
+      All five models share the same inference mechanism: a <em>vision encoder</em> maps the
+      histopathology patch into a latent embedding, and a <em>text encoder</em> maps each
+      class description into the same space. The class whose text embedding has the highest
+      cosine similarity with the image embedding is predicted — no fine-tuning required.
+    </p>
+
+    <div class="figure-block">
+      <img src="assets/figures/path-clip.png"
+           alt="CLIP framework: vision and text encoders map image patches and class descriptions into a shared latent space; cosine similarity selects the class.">
+      <p class="figure-caption">
+        <strong>Figure 1.</strong> Overview of the CLIP framework for vision–language modeling.
+        Image and text encoders are trained jointly through contrastive learning to align
+        embeddings in a shared latent space. Zero-shot classification is performed at test
+        time by selecting the class with the highest cosine similarity.
+      </p>
+    </div>
+
+    <h3>Models</h3>
+    <p>We evaluate five pathology-domain VLMs, all built on the CLIP architecture with
+    Vision Transformer backbones pretrained on large-scale histopathology image-text corpora.</p>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Model</th>
+            <th>Pretraining Data</th>
+            <th>Architecture</th>
+            <th>Parameters</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>CONCH</strong></td>
+            <td>1.17 M H&amp;E image-text pairs</td>
+            <td>ViT-B/16</td>
+            <td>86 M</td>
+          </tr>
+          <tr>
+            <td><strong>PathGen-CLIP</strong></td>
+            <td>PathGen-1.6 M dataset</td>
+            <td>ViT-B/16</td>
+            <td>86 M</td>
+          </tr>
+          <tr>
+            <td><strong>KEEP</strong></td>
+            <td>143 K knowledge-enhanced semantic groups</td>
+            <td>ViT-L/16</td>
+            <td>304 M</td>
+          </tr>
+          <tr>
+            <td><strong>QuiltNet</strong></td>
+            <td>Quilt-1 M (1 M image-text pairs)</td>
+            <td>ViT-B/32</td>
+            <td>88 M</td>
+          </tr>
+          <tr>
+            <td><strong>PLIP</strong></td>
+            <td>OpenPath (208 K pairs)</td>
+            <td>ViT-B/32</td>
+            <td>88 M</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Prompt Design</h3>
+    <p>
+      We design 20 prompt pairs organized into four hierarchical categories of increasing
+      clinical specificity. Each pair is ordered <code>[negative class, positive class]</code>
+      to align with PCam labels (0 = normal, 1 = tumor). Five prompts per category capture
+      intra-category variance.
+    </p>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Category</th>
+            <th>Style</th>
+            <th>Example Negative Class</th>
+            <th>Example Positive Class</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Minimal</strong></td>
+            <td>Single-word labels</td>
+            <td class="mono">"normal"</td>
+            <td class="mono">"cancer"</td>
+          </tr>
+          <tr>
+            <td><strong>Anatomical</strong></td>
+            <td>+ Anatomical context</td>
+            <td class="mono">"normal lymph node"</td>
+            <td class="mono">"lymph node with cancer"</td>
+          </tr>
+          <tr>
+            <td><strong>Descriptive</strong></td>
+            <td>+ Imaging modality &amp; staining</td>
+            <td class="mono">"histopathology image of normal tissue"</td>
+            <td class="mono">"histopathology image showing metastatic cancer"</td>
+          </tr>
+          <tr>
+            <td><strong>Clinical</strong></td>
+            <td>Diagnostic / pathology-report terminology</td>
+            <td class="mono">"sentinel lymph node without tumor involvement"</td>
+            <td class="mono">"sentinel lymph node with metastatic breast carcinoma"</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3>Dataset</h3>
+    <p>
+      We evaluate on <strong>PatchCamelyon (PCam)</strong>, a benchmark for metastatic tumor
+      detection in lymph node histopathology. PCam contains 327,680 H&amp;E stained images
+      (96 × 96 px) with binary labels. We use the official test split of
+      <strong>32,768 images</strong> for all evaluations to ensure reproducibility.
+    </p>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════ RESULTS -->
+<section id="results" class="alt">
+  <div class="container">
+    <h2>Results</h2>
+
+    <h3>Headline Performance</h3>
+    <p>
+      KEEP achieves the highest best accuracy of <strong>83.3%</strong>, followed by
+      PathGen-CLIP (79.7%) and QuiltNet (74.5%). Critically, performance varies dramatically
+      within each model — CONCH ranges from 38.4% to 73.3% across 20 prompts, a
+      <strong>34.9 percentage-point swing</strong> from prompt wording alone.
+    </p>
+
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Model</th>
+            <th>Best Accuracy</th>
+            <th>Best Prompt</th>
+            <th>Best F1</th>
+            <th>Best AUC-ROC</th>
+            <th>Mean Acc. ± SD</th>
+            <th>Range (pp)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="best-row">
+            <td><strong>KEEP</strong></td>
+            <td class="best-val">83.3%</td>
+            <td><span class="mono">clinical_3</span></td>
+            <td>83.8%</td>
+            <td>92.0%</td>
+            <td>66.2 ± 9.6%</td>
+            <td class="num">32.3</td>
+          </tr>
+          <tr>
+            <td><strong>PathGen-CLIP</strong></td>
+            <td>79.7%</td>
+            <td><span class="mono">anatomical_1</span></td>
+            <td>81.0%</td>
+            <td>89.4%</td>
+            <td>68.9 ± 8.3%</td>
+            <td class="num">26.7</td>
+          </tr>
+          <tr>
+            <td><strong>QuiltNet</strong></td>
+            <td>74.5%</td>
+            <td><span class="mono">clinical_2</span></td>
+            <td>74.3%</td>
+            <td>85.0%</td>
+            <td>60.3 ± 7.6%</td>
+            <td class="num">31.2</td>
+          </tr>
+          <tr>
+            <td><strong>CONCH</strong></td>
+            <td>73.3%</td>
+            <td><span class="mono">clinical_1</span></td>
+            <td>72.6%</td>
+            <td>83.2%</td>
+            <td>56.1 ± 8.9%</td>
+            <td class="num">34.9</td>
+          </tr>
+          <tr>
+            <td><strong>PLIP</strong></td>
+            <td>70.7%</td>
+            <td><span class="mono">descriptive_1</span></td>
+            <td>76.1%</td>
+            <td>85.7%</td>
+            <td>57.2 ± 7.4%</td>
+            <td class="num">28.1</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p style="font-size:0.8rem;color:var(--text-muted);">
+      All metrics on the PCam test split (32,768 images). Range = best − worst accuracy across
+      all 20 prompts. Best row highlighted in green.
+    </p>
+
+    <h3>Performance Across Prompt Categories</h3>
+    <p>
+      Clinical and descriptive prompts consistently outperform minimal prompts across most
+      models, with accuracy improvements of 3.2% (PLIP) to 11.2% (CONCH). Model-category
+      preferences diverge: KEEP performs best with anatomical prompts (73.3% mean), while
+      CONCH, PathGen-CLIP, and PLIP favor descriptive prompts. High intra-category standard
+      deviations (e.g., CONCH clinical: 11.2%) show that even within a category, exact
+      wording still matters.
+    </p>
+
+    <div class="figure-block">
+      <img src="assets/figures/fig_category_comparison.png"
+           alt="Bar charts comparing mean accuracy, F1-score, and AUC-ROC across the four prompt categories for all five models">
+      <p class="figure-caption">
+        <strong>Figure 2.</strong> Mean ± SD accuracy (left), F1-score (middle), and AUC-ROC
+        (right) for each model across the four prompt categories on PCam. Clinical and
+        descriptive prompts consistently outperform minimal prompts. Error bars indicate
+        standard deviation across the 5 prompts within each category.
+      </p>
+    </div>
+
+    <!-- Full all-prompts table (collapsible) -->
+    <button class="toggle-btn" onclick="toggleSection('full-results', this)">
+      <span>▶</span> Show full results — all 20 prompts × 5 models
+    </button>
+    <div id="full-results" class="collapsible">
+      <div style="height:16px;"></div>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Cat.</th>
+              <th>Prompt pair (negative → positive)</th>
+              <th>CONCH</th>
+              <th>PathGen-CLIP</th>
+              <th>KEEP</th>
+              <th>QuiltNet</th>
+              <th>PLIP</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr class="cat-hdr"><td colspan="7">Minimal</td></tr>
+            <tr>
+              <td>M1</td>
+              <td class="mono">"normal" → "cancer"</td>
+              <td class="num">54.1</td><td class="num">77.6</td><td class="num">53.2</td><td class="num">71.9</td><td class="num">63.4</td>
+            </tr>
+            <tr>
+              <td>M2</td>
+              <td class="mono">"healthy" → "tumor"</td>
+              <td class="num">48.0</td><td class="num">64.8</td><td class="num">57.0</td><td class="num">66.4</td><td class="num">62.5</td>
+            </tr>
+            <tr>
+              <td>M3</td>
+              <td class="mono">"benign" → "malignant"</td>
+              <td class="num">45.0</td><td class="num">58.8</td><td class="num">65.2</td><td class="num">64.2</td><td class="num">52.0</td>
+            </tr>
+            <tr>
+              <td>M4</td>
+              <td class="mono">"no metastasis" → "metastasis"</td>
+              <td class="num">64.7</td><td class="num">53.0</td><td class="num">52.9</td><td class="num">59.3</td><td class="num">44.2</td>
+            </tr>
+            <tr>
+              <td>M5</td>
+              <td class="mono">"normal tissue" → "cancerous tissue"</td>
+              <td class="num">50.1</td><td class="num">76.7</td><td class="num">53.2</td><td class="num">65.5</td><td class="num">60.2</td>
+            </tr>
+
+            <tr class="cat-hdr"><td colspan="7">Anatomical</td></tr>
+            <tr>
+              <td>A1</td>
+              <td class="mono">"normal lymph node" → "lymph node with cancer"</td>
+              <td class="num">51.9</td><td class="num best-val">79.7</td><td class="num">79.0</td><td class="num">61.2</td><td class="num">56.3</td>
+            </tr>
+            <tr>
+              <td>A2</td>
+              <td class="mono">"LN without metastasis" → "LN metastasis"</td>
+              <td class="num">54.2</td><td class="num">55.1</td><td class="num">71.2</td><td class="num">54.6</td><td class="num">42.6</td>
+            </tr>
+            <tr>
+              <td>A3</td>
+              <td class="mono">"healthy lymph node" → "metastatic lymph node"</td>
+              <td class="num">55.7</td><td class="num">63.9</td><td class="num">63.3</td><td class="num">54.1</td><td class="num">50.0</td>
+            </tr>
+            <tr>
+              <td>A4</td>
+              <td class="mono">"LN normal tissue" → "tumor in lymph node"</td>
+              <td class="num">49.3</td><td class="num">73.3</td><td class="num">76.5</td><td class="num">61.7</td><td class="num">53.3</td>
+            </tr>
+            <tr>
+              <td>A5</td>
+              <td class="mono">"benign LN tissue" → "cancerous LN tissue"</td>
+              <td class="num">55.4</td><td class="num">70.4</td><td class="num">76.3</td><td class="num">62.3</td><td class="num">64.2</td>
+            </tr>
+
+            <tr class="cat-hdr"><td colspan="7">Descriptive</td></tr>
+            <tr>
+              <td>D1</td>
+              <td class="mono">"histopathology image of normal tissue" → "... metastatic cancer"</td>
+              <td class="num">53.6</td><td class="num">78.4</td><td class="num">59.9</td><td class="num">57.7</td><td class="num best-val">70.7</td>
+            </tr>
+            <tr>
+              <td>D2</td>
+              <td class="mono">"normal LN architecture" → "metastatic breast cancer"</td>
+              <td class="num">69.8</td><td class="num">79.5</td><td class="num">70.5</td><td class="num">58.5</td><td class="num">65.1</td>
+            </tr>
+            <tr>
+              <td>D3</td>
+              <td class="mono">"H&amp;E stained normal LN" → "H&amp;E stained LN with tumor"</td>
+              <td class="num">69.6</td><td class="num">69.6</td><td class="num">77.7</td><td class="num">55.1</td><td class="num">49.6</td>
+            </tr>
+            <tr>
+              <td>D4</td>
+              <td class="mono">"microscopy image of healthy LN" → "cancer metastasis"</td>
+              <td class="num">70.1</td><td class="num">66.8</td><td class="num">69.2</td><td class="num">69.7</td><td class="num">59.2</td>
+            </tr>
+            <tr>
+              <td>D5</td>
+              <td class="mono">"pathology slide with normal cells" → "malignant cells"</td>
+              <td class="num">54.9</td><td class="num">60.1</td><td class="num">59.1</td><td class="num">57.0</td><td class="num">63.1</td>
+            </tr>
+
+            <tr class="cat-hdr"><td colspan="7">Clinical</td></tr>
+            <tr>
+              <td>C1</td>
+              <td class="mono">"sentinel LN without tumor" → "... metastatic breast carcinoma"</td>
+              <td class="num best-val">73.3</td><td class="num">73.8</td><td class="num">68.2</td><td class="num">53.5</td><td class="num">57.2</td>
+            </tr>
+            <tr>
+              <td>C2</td>
+              <td class="mono">"LN with preserved architecture" → "infiltrating carcinoma"</td>
+              <td class="num">55.6</td><td class="num">78.8</td><td class="num">51.1</td><td class="num best-val">74.5</td><td class="num">65.0</td>
+            </tr>
+            <tr>
+              <td>C3</td>
+              <td class="mono">"LN with normal histology" → "metastatic adenocarcinoma in LN"</td>
+              <td class="num">57.5</td><td class="num">58.9</td><td class="num best-val">83.3</td><td class="num">48.7</td><td class="num">50.0</td>
+            </tr>
+            <tr>
+              <td>C4</td>
+              <td class="mono">"LN free of metastatic disease" → "breast cancer metastasis to LN"</td>
+              <td class="num">51.2</td><td class="num">67.2</td><td class="num">63.9</td><td class="num">43.2</td><td class="num">53.4</td>
+            </tr>
+            <tr>
+              <td>C5</td>
+              <td class="mono">"histologically normal lymphoid tissue" → "tumor metastasis"</td>
+              <td class="num">38.4</td><td class="num">71.3</td><td class="num">73.0</td><td class="num">66.6</td><td class="num">62.8</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="font-size:0.78rem;color:var(--text-muted);margin-top:8px;">
+        All values are accuracy (%) on the PCam test split (32,768 images). Bold-green = best result per model. LN = lymph node.
+      </p>
+    </div>
+
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════ GRADCAM -->
+<section id="gradcam">
+  <div class="container">
+    <h2>GradCAM Attention Analysis</h2>
+    <p>
+      Using each model's best-performing prompt, we generate GradCAM heatmaps for
+      representative examples from all four confusion-matrix categories. This reveals not
+      just <em>whether</em> models fail, but <em>where they look</em> and <em>why</em>.
+    </p>
+
+    <div class="figure-block">
+      <img src="assets/figures/confusion_gradcam_v2-min.png"
+           alt="GradCAM attention visualizations across confusion matrix categories (TP, TN, FP, FN) for all five pathology VLMs">
+      <p class="figure-caption">
+        <strong>Figure 3.</strong> GradCAM attention visualization across confusion matrix
+        categories. Each row shows one model (using its best-performing prompt). Columns show
+        True Positive (TP), True Negative (TN), False Positive (FP), and False Negative (FN)
+        cases, each displaying the original H&amp;E patch alongside its GradCAM overlay.
+      </p>
+    </div>
+
+    <div class="finding-grid">
+      <div class="finding-card fc-tp">
+        <h3>✅ True Positives</h3>
+        <p>All models correctly attend to tumor regions. PathGen-CLIP and KEEP show highly
+        focused attention on metastatic cells, correlating with their higher overall accuracy.
+        CONCH exhibits more diffuse attention even in correct predictions.</p>
+      </div>
+      <div class="finding-card fc-tn">
+        <h3>✔️ True Negatives</h3>
+        <p>Models identify normal tissue by distributing attention across preserved lymph node
+        architecture. KEEP and PathGen-CLIP show broad, appropriate coverage of normal
+        cellular structures; QuiltNet focuses on specific local regions.</p>
+      </div>
+      <div class="finding-card fc-fp">
+        <h3>⚠️ False Positives — Shortcut Learning</h3>
+        <p>FP errors arise from attention to dense cellular regions, reactive lymphoid
+        hyperplasia, and tissue artifacts that superficially mimic metastatic tissue.
+        PLIP and CONCH are most susceptible, over-relying on low-level texture
+        features rather than structural diagnostic patterns.</p>
+      </div>
+      <div class="finding-card fc-fn">
+        <h3>❌ False Negatives — Context Over-Weighting</h3>
+        <p>85% of FN cases show peak attention on surrounding stroma or inflammatory
+        infiltrates rather than tumor cells. Most pronounced in CONCH and PLIP, this
+        pattern suggests models discount the primary diagnostic feature when reactive
+        context is prominent.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════ FINDINGS -->
+<section id="findings" class="alt">
+  <div class="container">
+    <h2>Key Takeaways</h2>
+    <ul class="takeaway-list">
+      <li class="takeaway-item">
+        <span class="t-icon">📊</span>
+        <div class="t-text">
+          <strong>Prompt wording is a critical hyperparameter.</strong>
+          The same model on the same images achieves between 38.4% and 83.3% accuracy
+          depending solely on how the class labels are phrased — a swing of up to 44.9
+          percentage points. Prompt selection is not cosmetic; it is a fundamental
+          determinant of clinical utility.
+        </div>
+      </li>
+      <li class="takeaway-item">
+        <span class="t-icon">🏥</span>
+        <div class="t-text">
+          <strong>Clinical specificity generally helps, but the optimal category is model-dependent.</strong>
+          KEEP peaks with anatomical prompts; CONCH, PathGen-CLIP, and PLIP prefer
+          descriptive prompts. Switching models mid-deployment requires revalidating the
+          entire prompt selection process.
+        </div>
+      </li>
+      <li class="takeaway-item">
+        <span class="t-icon">🔍</span>
+        <div class="t-text">
+          <strong>Failure modes are systematic, not random.</strong>
+          False positives consistently arise from attention to high-cellularity artifacts
+          (shortcut learning). False negatives arise from over-weighting reactive stroma.
+          Both patterns are reproducible across images and actionable for model improvement.
+        </div>
+      </li>
+      <li class="takeaway-item">
+        <span class="t-icon">🚀</span>
+        <div class="t-text">
+          <strong>Real-time attention monitoring could improve clinical safety.</strong>
+          Flagging cases where GradCAM heatmaps fall outside expected tumor regions (in TP
+          predictions) or on known artifact patterns can route borderline cases to human
+          review — a low-cost quality-control layer for clinical deployment.
+        </div>
+      </li>
+    </ul>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════ CITATION -->
+<section id="citation">
+  <div class="container">
+    <h2>Citation</h2>
+    <p>If you use this work, please cite:</p>
+
+    <div class="code-block">@inproceedings{kumari2026clinical,
+  title     = {Clinical concept Sensitivity and Visual Attention Analysis
+               for Breast Cancer Detection},
+  author    = {Kumari, Ayushi and Rani, Seema},
+  booktitle = {2026 International Conference on Computational Intelligence
+               Systems and Devices (ICCISD)},
+  year      = {2026},
+  publisher = {IEEE},
+  note      = {To appear}
+}</div>
+
+    <p style="margin-top:24px;">Please also cite the underlying models and dataset:</p>
+    <div class="table-wrap" style="margin-top:12px;">
+      <table>
+        <thead>
+          <tr><th>Asset</th><th>Citation</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><strong>PCam dataset</strong></td><td>Veeling et al., <em>Rotation Equivariant CNNs for Digital Pathology</em>, MICCAI 2018</td></tr>
+          <tr><td><strong>CONCH</strong></td><td>Lu et al., <em>A visual–language foundation model for computational pathology</em>, Nature Medicine 2024</td></tr>
+          <tr><td><strong>PathGen-CLIP</strong></td><td>Sun et al., <em>PathGen-1.6M</em>, 2024</td></tr>
+          <tr><td><strong>KEEP</strong></td><td>Zhou et al., <em>KEEP: Knowledge-enhanced foundation model for histopathology</em>, 2024</td></tr>
+          <tr><td><strong>QuiltNet</strong></td><td>Ikezogwo et al., <em>Quilt-1M: One million image-text pairs for histopathology</em>, NeurIPS 2023</td></tr>
+          <tr><td><strong>PLIP</strong></td><td>Huang et al., <em>PLIP: A visual–language foundation model for pathology image analysis</em>, Nature Medicine 2023</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════ ACKNOWLEDGMENTS -->
+<section id="acknowledgments" class="alt">
+  <div class="container">
+    <h2>Acknowledgments</h2>
+    <p>
+      This work builds on the models and datasets released by the teams behind PCam, CONCH,
+      PathGen-CLIP, KEEP, QuiltNet, and PLIP. We thank the open-source community and the
+      authors of <a href="https://pytorch.org/" target="_blank">PyTorch</a>,
+      <a href="https://github.com/mlfoundations/open_clip" target="_blank">OpenCLIP</a>,
+      <a href="https://github.com/huggingface/pytorch-image-models" target="_blank">timm</a>,
+      and <a href="https://github.com/huggingface/transformers" target="_blank">HuggingFace Transformers</a>.
+    </p>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════ FOOTER -->
+<footer>
+  <div class="container">
+    <p>
+      © 2026 Ayushi Kumari, Seema Rani · Amity University, Noida, India &nbsp;|&nbsp;
+      <a href="https://github.com/Ayu-98-kumari/clinical_concept_sensitivity_analysis_in_pathology_vlms"
+         target="_blank">GitHub Repository</a>
+    </p>
+  </div>
+</footer>
+
+<script>
+  // ── Theme toggle ──────────────────────────────────────────────
+  function getTheme() {
+    return document.documentElement.getAttribute('data-theme') ||
+           (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+  }
+  function toggleTheme() {
+    document.documentElement.setAttribute(
+      'data-theme',
+      getTheme() === 'dark' ? 'light' : 'dark'
+    );
+  }
+
+  // ── Collapsible sections ──────────────────────────────────────
+  function toggleSection(id, btn) {
+    const el = document.getElementById(id);
+    const arrow = btn.querySelector('span');
+    const isOpen = el.classList.toggle('open');
+    arrow.textContent = isOpen ? '▼' : '▶';
+    btn.textContent = '';
+    btn.appendChild(arrow);
+    btn.appendChild(document.createTextNode(
+      isOpen
+        ? ' Hide full results table'
+        : ' Show full results — all 20 prompts × 5 models'
+    ));
+  }
+</script>
+
+</body>
+</html>
